@@ -1,0 +1,604 @@
+<title>StudySwap Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sticky step bar on top, one view at a time below; the session view splits call | whiteboard. */
+:root{
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E9EDF4; --ink:#161D2B; --muted:#5A6478; --line:#D7DDE8;
+  --you:#2952F5; --you-soft:#E3E9FF; --them:#C94A12; --them-soft:#FCE9DE;
+  --hl:#FFE36B; --hl-ink:#161D2B; --good:#11865A; --warn:#B7791F; --danger:#C0352B;
+  --dot:#C9D1DF; --note:#FFF8D6; --note-line:#EADB8F;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Inter", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E121A; --surface:#161C27; --surface-2:#1F2633; --ink:#E6EAF2; --muted:#9AA4B6; --line:#2A3343;
+  --you:#829BFF; --you-soft:#1F2A4D; --them:#FF8E57; --them-soft:#3D2418;
+  --hl:#E9C93A; --hl-ink:#14181F; --good:#3CC48A; --warn:#E2A93B; --danger:#F06A5F;
+  --dot:#2B3345; --note:#2A2716; --note-line:#4D4520; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E121A; --surface:#161C27; --surface-2:#1F2633; --ink:#E6EAF2; --muted:#9AA4B6; --line:#2A3343;
+  --you:#829BFF; --you-soft:#1F2A4D; --them:#FF8E57; --them-soft:#3D2418;
+  --hl:#E9C93A; --hl-ink:#14181F; --good:#3CC48A; --warn:#E2A93B; --danger:#F06A5F;
+  --dot:#2B3345; --note:#2A2716; --note-line:#4D4520; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1rem;font-weight:700}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.eyebrow{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+mark{background:var(--hl);color:var(--hl-ink);padding:0 .2em;border-radius:3px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1180px;margin:0 auto;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:800;font-size:1.2rem;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.brand .swap{display:inline-flex;gap:2px}
+.brand .swap i{width:10px;height:10px;border-radius:50%;display:block}
+.brand .swap i:first-child{background:var(--you)} .brand .swap i:last-child{background:var(--them)}
+.steps{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+.step{border:1px solid transparent;background:none;padding:6px 12px;border-radius:999px;color:var(--muted);font-weight:500;display:flex;gap:6px;align-items:center}
+.step b{font-family:var(--f-mono);font-size:.75rem;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);color:var(--muted)}
+.step[aria-current="true"]{color:var(--ink);border-color:var(--line);background:var(--bg)}
+.step[aria-current="true"] b{background:var(--ink);color:var(--surface)}
+.step:disabled{opacity:.45;cursor:not-allowed}
+
+main{max-width:1180px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.intro{display:flex;flex-direction:column;gap:6px;margin-bottom:20px;max-width:70ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+.btn{border:1px solid var(--line);background:var(--surface);padding:9px 16px;border-radius:8px;font-weight:600}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.btn.primary:hover{opacity:.9}
+.btn.you{background:var(--you);border-color:var(--you);color:#fff}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.btn.small{padding:5px 10px;font-size:.85rem}
+.demo-tag{font-size:.7rem;font-family:var(--f-mono);border:1px dashed var(--muted);color:var(--muted);border-radius:4px;padding:1px 5px;margin-left:6px}
+
+/* Profile */
+.profile-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.live{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px)}
+.field label{display:block;font-weight:600;margin-bottom:6px}
+.field input[type=text]{width:100%;max-width:280px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.units{display:flex;flex-direction:column}
+.unit{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.unit:last-child{border-bottom:0}
+.unit .uname{min-width:0}
+.unit .uname small{display:block;color:var(--muted);font-size:.75rem}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 12px;font-size:.85rem;font-weight:500;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.seg button[data-r="1"][aria-pressed="true"]{background:var(--them);color:#fff}
+.seg button[data-r="3"][aria-pressed="true"]{background:var(--you);color:#fff}
+.grid-wrap{overflow-x:auto}
+.avail{display:grid;grid-template-columns:44px repeat(7,minmax(30px,1fr));gap:3px;user-select:none;touch-action:none;min-width:290px}
+.avail .h{font-family:var(--f-mono);font-size:.7rem;color:var(--muted);text-align:right;padding-right:4px;line-height:20px}
+.avail .d{font-size:.75rem;font-weight:600;text-align:center;color:var(--muted)}
+.avail .c{height:20px;border-radius:3px;background:var(--surface-2);border:0;padding:0}
+.avail .c.on{background:var(--you)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:.8rem;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink);border:1px solid transparent}
+.chip.you{background:var(--you-soft);color:var(--you);font-weight:600}
+.chip.them{background:var(--them-soft);color:var(--them);font-weight:600}
+.chip.off{opacity:.5}
+
+/* Match */
+.match-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;align-items:start}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.pair{display:flex;align-items:center;gap:10px}
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:1.1rem;color:#fff;flex:none}
+.avatar.you{background:var(--you)} .avatar.them{background:var(--them)}
+.arrows{font-family:var(--f-mono);color:var(--muted)}
+.label{font-size:.8rem;font-weight:700;padding:4px 10px;border-radius:999px}
+.label.great{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.label.good{background:color-mix(in srgb,var(--you) 14%,transparent);color:var(--you)}
+.label.ok{background:var(--surface-2);color:var(--muted)}
+.explain{font-size:1.05rem;line-height:1.6;max-width:62ch}
+.teach-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.teach-col{border-radius:8px;padding:12px;min-width:0}
+.teach-col.you{background:var(--you-soft)} .teach-col.them{background:var(--them-soft)}
+.teach-col h3{font-size:.85rem;margin-bottom:6px}
+.teach-col.you h3{color:var(--you)} .teach-col.them h3{color:var(--them)}
+.teach-col ul{margin:0;padding-left:18px;font-size:.9rem}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:grid;grid-template-columns:90px 1fr 60px;gap:10px;align-items:center;font-size:.85rem}
+.bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:4px}
+.status{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:8px;background:var(--surface-2);font-weight:500}
+.status .dot{width:9px;height:9px;border-radius:50%;background:var(--warn);flex:none}
+.status.active .dot{background:var(--good)}
+.formula{font-family:var(--f-mono);font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto;white-space:pre}
+
+/* Class */
+.class-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tr.mine td{background:var(--you-soft)}
+.table-wrap{overflow-x:auto}
+.win{color:var(--good);font-weight:700}
+.toy svg{width:100%;max-width:340px;height:auto;display:block}
+.toy text{font-family:var(--f-mono);font-size:13px;fill:var(--ink)}
+.toy .node circle{fill:var(--surface);stroke:var(--ink);stroke-width:2}
+.toy .node.stranded circle{stroke:var(--danger);stroke-dasharray:4 3}
+.toy .node text{font-family:var(--f-display);font-weight:800;font-size:16px}
+.toy line{stroke:var(--line);stroke-width:3}
+.toy line.on{stroke:var(--good);stroke-width:6}
+.toy .nolink{stroke:var(--muted);stroke-dasharray:3 5;stroke-width:1.5}
+
+/* Session */
+.timerbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;background:var(--ink);color:var(--surface);border-radius:var(--r);padding:14px 18px}
+.timerbar .now{min-width:0}
+.timerbar .now .eyebrow{color:color-mix(in srgb,var(--surface) 65%,transparent)}
+.timerbar .now strong{font-family:var(--f-display);font-size:1.25rem;display:block}
+.clock{font-family:var(--f-mono);font-size:2rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+.prog{grid-column:1/-1;display:flex;gap:4px}
+.prog i{flex:var(--w);height:6px;border-radius:3px;background:color-mix(in srgb,var(--surface) 22%,transparent);position:relative;overflow:hidden}
+.prog i.done{background:var(--surface)}
+.prog i b{position:absolute;inset:0 auto 0 0;background:var(--hl)}
+.tb-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.tb-actions .btn{background:transparent;color:var(--surface);border-color:color-mix(in srgb,var(--surface) 35%,transparent)}
+.tb-actions .btn.primary{background:var(--surface);color:var(--ink)}
+.tb-actions .btn.danger{color:#FF9C93}
+.tb-actions label{display:flex;gap:6px;align-items:center;font-size:.85rem;margin-left:auto}
+.room{display:grid;grid-template-columns:35fr 65fr;gap:14px;margin-top:14px}
+.call{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;min-width:0}
+.tile{aspect-ratio:4/3;max-width:100%;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;position:relative}
+.tile .avatar{width:64px;height:64px;font-size:1.6rem}
+.tile .tname{position:absolute;left:8px;bottom:8px;font-size:.8rem;font-weight:600;background:var(--surface);padding:2px 8px;border-radius:4px}
+.tile .cam{position:absolute;right:8px;bottom:8px;font-size:.7rem;font-family:var(--f-mono);color:var(--muted)}
+.tile.speaking{box-shadow:0 0 0 3px var(--good)}
+.board{position:relative;min-height:520px;border:1px solid var(--line);border-radius:var(--r);overflow:auto;background-color:var(--surface);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.2px);background-size:20px 20px}
+.board-inner{position:relative;width:1080px;height:560px}
+.note{position:absolute;width:240px;background:var(--note);border:1px solid var(--note-line);border-radius:4px;padding:12px;font-size:.82rem;box-shadow:0 2px 0 var(--note-line);cursor:grab;touch-action:none}
+.note.current{outline:3px solid var(--hl);outline-offset:2px}
+.note h4{margin:0 0 2px;font-family:var(--f-display);font-size:.95rem}
+.note .who{font-weight:700;font-size:.78rem}
+.note .who.you{color:var(--you)} .note .who.them{color:var(--them)} .note .who.both{color:var(--muted)}
+.note ol{margin:6px 0 0;padding-left:18px}
+.note ol li{margin-bottom:4px}
+.note .ai{margin-top:8px;font-size:.68rem;font-family:var(--f-mono);color:var(--muted)}
+.board-tag{position:sticky;left:8px;top:8px;display:inline-block;margin:8px;font-size:.72rem;font-family:var(--f-mono);background:var(--surface);border:1px solid var(--line);padding:2px 8px;border-radius:4px;z-index:2}
+
+/* Modal + toast */
+.scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 45%,transparent);display:grid;place-items:center;z-index:20;padding:16px}
+.modal{background:var(--surface);border-radius:var(--r);padding:22px;max-width:440px;width:100%;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
+.modal label.opt{display:flex;gap:8px;align-items:center}
+.modal textarea{width:100%;min-height:70px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink);font:inherit}
+.stars{display:flex;gap:6px}
+.stars button{width:42px;height:42px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-family:var(--f-mono);font-weight:600}
+.stars button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:8px;z-index:30;max-width:calc(100% - 32px);font-weight:500}
+
+@media (max-width:860px){
+  .profile-grid,.match-grid,.class-grid,.room{grid-template-columns:minmax(0,1fr)}
+  .live{position:static}
+  .call{flex-direction:row}
+  .call .tile{flex:1}
+  .call .call-note{display:none}
+  .steps{margin-left:0}
+}
+@media (max-width:480px){.teach-cols{grid-template-columns:1fr} .step span{display:none} .clock{font-size:1.6rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top"><div class="top-in">
+  <div class="brand"><span class="swap"><i></i><i></i></span>StudySwap</div>
+  <nav class="steps" id="steps" aria-label="Demo steps"></nav>
+</div></header>
+
+<main>
+  <section id="v-profile"></section>
+  <section id="v-match" hidden></section>
+  <section id="v-class" hidden></section>
+  <section id="v-session" hidden></section>
+</main>
+<div id="modal-root"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+// ---------- Data ----------
+// Short labels for the 8 AP Calculus AB units (College Board order).
+const UNITS = ["Limits & Continuity","Derivative Basics","Chain & Implicit Rules","Rates in Context","Curve Analysis","Integration","Differential Equations","Area & Volume"];
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const HOURS = Array.from({length:14},(_,i)=>8+i); // 8am..9pm start hours (ends 10pm)
+const NAMES = ["Sam","Priya","Jordan","Mei","Diego","Ava","Noah","Zara","Leo","Hana","Omar","Ivy","Theo"];
+const BANK = {
+  "Limits & Continuity":["Find lim x→3 of (x² − 9)/(x − 3).","Is f(x) = |x|/x continuous at x = 0? Explain with the definition.","What is lim x→0 of x²·sin(1/x)? Justify it."],
+  "Derivative Basics":["Use the limit definition to find f′(x) for f(x) = x².","Differentiate y = 4x³ − 5x + 7.","Find the slope of the tangent to y = √x at x = 4."],
+  "Chain & Implicit Rules":["Differentiate y = sin(3x²).","Find dy/dx if x² + y² = 25.","Differentiate y = arctan(2x)."],
+  "Rates in Context":["A balloon's radius grows 2 cm/s. How fast is its volume changing at r = 5 cm?","s(t) = t³ − 6t². When is the particle at rest?","Use a linear approximation to estimate √26."],
+  "Curve Analysis":["Find the critical points of f(x) = x³ − 3x.","Where is f(x) = x⁴ − 4x³ concave up?","Does the Mean Value Theorem apply to x² on [1, 3]? Find c if it does."],
+  "Integration":["Evaluate ∫ (3x² + 2) dx.","Evaluate ∫₀² x dx and sketch the area it represents.","Use u-substitution: ∫ 2x·cos(x²) dx."],
+  "Differential Equations":["Check that y = e^(2x) solves y′ = 2y.","Solve dy/dx = xy with y(0) = 1 by separating variables.","Sketch the slope field of dy/dx = x − y at four points."],
+  "Area & Volume":["Find the area between y = x and y = x² on [0, 1].","Water flows in at r(t) = 3t gal/min. How much enters from t = 0 to 4?","Find the average value of x² on [0, 3]."]
+};
+const key = (d,h) => d*100+h;
+const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+
+// Fake classmates: mostly after-school availability, deliberately varied ratings.
+function makeClass(seed){
+  const r = rng(seed), pick = a => a[Math.floor(r()*a.length)];
+  return NAMES.map((name,i)=>{
+    const ratings = {};
+    UNITS.forEach(u=>{const x=r(); ratings[u] = x<0.3?1 : x<0.65?2 : 3;});
+    if(!Object.values(ratings).includes(3)) ratings[pick(UNITS)] = 3;
+    if(!Object.values(ratings).includes(1)){let u; do{u=pick(UNITS)}while(ratings[u]===3); ratings[u]=1;}
+    const slots = new Set();
+    const days = [0,1,2,3,4].map(d=>[r(),d]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]).slice(0,2+Math.floor(r()*3));
+    days.forEach(d=>{const s=15+Math.floor(r()*4), len=1+Math.floor(r()*3); for(let h=s;h<Math.min(s+len,22);h++) slots.add(key(d,h));});
+    if(r()<0.4){const d=5+Math.floor(r()*2), s=9+Math.floor(r()*4); slots.add(key(d,s)); slots.add(key(d,s+1));}
+    return {id:"s"+i,name,ratings,slots,noise:r()<0.6?"quiet":"talk",time:pick(["afternoon","afternoon","evening","morning"]),blocked:new Set(),declined:new Set()};
+  });
+}
+
+// ---------- Matching (mirrors api/app/matching.py) ----------
+function teaching(t,l){
+  const full=[],half=[];
+  for(const u of UNITS){ if(t.ratings[u]!==3) continue; if(l.ratings[u]===1) full.push(u); else if(l.ratings[u]===2) half.push(u); }
+  return {pts: full.length + 0.5*half.length, units: full.concat(half), full, half};
+}
+function pairScore(a,b){
+  if(a.blocked.has(b.id)||b.blocked.has(a.id)||a.declined.has(b.id)||b.declined.has(a.id)) return null;
+  const shared=[...a.slots].filter(s=>b.slots.has(s)).sort((x,y)=>x-y);
+  if(shared.length<1) return null;
+  const at=teaching(a,b), bt=teaching(b,a);
+  if(at.pts===0 && bt.pts===0) return null;
+  const swapRaw=Math.min(at.pts,bt.pts)*2+Math.max(at.pts,bt.pts);
+  const swap=Math.min(swapRaw/6,1), schedule=Math.min(shared.length,6)/6;
+  const style=(a.noise===b.noise?.5:0)+(a.time===b.time?.5:0);
+  return {score:.6*swap+.25*schedule+.15*style, swap, schedule, style, aT:at, bT:bt, shared, sameNoise:a.noise===b.noise, sameTime:a.time===b.time};
+}
+// Maximum weight matching. Classes here are small (≤ ~20), so an exact bitmask search is enough;
+// the real backend uses networkx.max_weight_matching, which scales to any class size.
+function maxWeight(n,E){
+  const full=(1<<n)-1, best=new Float64Array(1<<n).fill(-1), pick=new Int16Array(1<<n).fill(-1);
+  function f(mask){
+    if(mask===full) return 0; if(best[mask]>=0) return best[mask];
+    let i=0; while(mask>>i&1) i++;
+    const m2=mask|1<<i; let b=f(m2), p=-1;
+    for(let j=i+1;j<n;j++){ if(mask>>j&1||!E[i][j]) continue; const v=E[i][j].score+f(m2|1<<j); if(v>b+1e-9){b=v;p=j;} }
+    best[mask]=b; pick[mask]=p; return b;
+  }
+  f(0); const pairs=[]; let mask=0;
+  while(mask!==full){let i=0; while(mask>>i&1) i++; const p=pick[mask]; if(p>=0){pairs.push([i,p]); mask|=1<<i|1<<p;} else mask|=1<<i;}
+  return pairs;
+}
+function greedy(n,E){
+  const edges=[]; for(let i=0;i<n;i++) for(let j=i+1;j<n;j++) if(E[i][j]) edges.push([i,j,E[i][j].score]);
+  edges.sort((a,b)=>b[2]-a[2]); const used=new Set(), pairs=[];
+  for(const [i,j] of edges) if(!used.has(i)&&!used.has(j)){pairs.push([i,j]); used.add(i); used.add(j);}
+  return pairs;
+}
+function runMatching(){
+  const S=[state.me,...state.cls], n=S.length, E=S.map(()=>Array(n).fill(null));
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++) E[i][j]=pairScore(S[i],S[j]);
+  const stats = pairs => ({pairs, matched:pairs.length*2, total:pairs.reduce((s,[i,j])=>s+E[i][j].score,0), swap:pairs.length?pairs.reduce((s,[i,j])=>s+E[i][j].swap,0)/pairs.length:0});
+  return {S, E, max:stats(maxWeight(n,E)), greedy:stats(greedy(n,E))};
+}
+
+// ---------- Explanations (template, never an LLM) ----------
+const list = a => a.length<=1 ? (a[0]||"") : a.length===2 ? `${a[0]} and ${a[1]}` : `${a.slice(0,-1).join(", ")}, and ${a.at(-1)}`;
+const hr = h => `${((h+11)%12)+1}${h<12?"am":"pm"}`;
+function fmtRange(s,e){ const ap=x=>x<12?"am":"pm"; return ap(s)===ap(e)? `${((s+11)%12)+1}–${hr(e)}` : `${hr(s)}–${hr(e)}`; }
+function slotRanges(slots){
+  const byDay={}; slots.forEach(k=>{(byDay[Math.floor(k/100)] ||= []).push(k%100)});
+  const out=[]; Object.keys(byDay).sort().forEach(d=>{const hs=byDay[d].sort((a,b)=>a-b); let s=hs[0],p=hs[0];
+    for(const h of hs.slice(1).concat([99])){ if(h===p+1){p=h;continue;} out.push(`${DAYS[d]} ${fmtRange(s,p+1)}`); s=p=h; }});
+  return out;
+}
+function explain(m){
+  const me=m.aT.units, them=m.bT.units, P=esc(m.partner.name), parts=[];
+  if(me.length&&them.length) parts.push(`You're strong in ${list(me)}, and ${P} is strong in ${list(them)}.`);
+  else if(me.length) parts.push(`You're strong in ${list(me)}, where ${P} wants help.`);
+  else parts.push(`${P} is strong in ${list(them)}, where you want help.`);
+  parts.push(`You're both free ${list(slotRanges(m.shared))}.`);
+  const tw={morning:"in the morning",afternoon:"in the afternoon",evening:"in the evening"};
+  if(m.sameNoise&&m.sameTime) parts.push(`You both prefer ${state.me.noise==="quiet"?"quiet":"talkative"} study ${tw[state.me.time]}.`);
+  else if(m.sameNoise) parts.push(`You both like ${state.me.noise==="quiet"?"quiet":"talkative"} study.`);
+  else if(m.sameTime) parts.push(`You both like studying ${tw[state.me.time]}.`);
+  return parts.join(" ");
+}
+const matchLabel = s => s>=.7?["great","Great match"]: s>=.5?["good","Good match"]:["ok","Possible match"];
+
+// ---------- State ----------
+const me = {id:"me",name:"Alex",ratings:{"Limits & Continuity":3,"Derivative Basics":3,"Chain & Implicit Rules":2,"Rates in Context":2,"Curve Analysis":2,"Integration":1,"Differential Equations":1,"Area & Volume":2},
+  slots:new Set([key(1,16),key(1,17),key(3,17),key(3,18)]),noise:"quiet",time:"afternoon",camera:false,blocked:new Set(),declined:new Set()};
+const state = {view:"profile", seed:7, cls:makeClass(7), me, result:null, my:null, partnerId:null, status:"proposed", session:null, feedback:[], toy:"greedy"};
+
+function recompute(){
+  state.result = runMatching();
+  const p = state.result.max.pairs.find(([i,j])=>i===0||j===0);
+  if(!p){ state.my=null; if(state.status!=="active") state.partnerId=null; return; }
+  const j = p[0]===0?p[1]:p[0], e = state.result.E[0][j], partner = state.result.S[j];
+  state.my = {...e, partner};
+  if(partner.id!==state.partnerId){ state.partnerId=partner.id; state.status="proposed"; }
+}
+
+// ---------- Rendering ----------
+function renderSteps(){
+  const steps=[["profile","Profile"],["match","Your match"],["class","Class matching"],["session","Session"]];
+  document.getElementById("steps").innerHTML = steps.map(([v,l],i)=>
+    `<button class="step" data-go="${v}" aria-current="${state.view===v}" ${v==="session"&&!state.session?"disabled":""}><b>${i+1}</b><span>${l}</span></button>`).join("");
+}
+function show(v){
+  state.view=v; ["profile","match","class","session"].forEach(x=>document.getElementById("v-"+x).hidden = x!==v);
+  renderSteps(); ({profile:renderProfile,match:renderMatch,class:renderClass,session:renderSession})[v](); window.scrollTo(0,0);
+}
+
+function renderProfile(){
+  const m=state.my;
+  document.getElementById("v-profile").innerHTML = `
+  <div class="intro"><span class="eyebrow">Step 1 · Onboarding</span><h1>Tell us what you can teach and what you need</h1>
+  <p class="muted">Change anything here and the matcher reruns against ${state.cls.length} seeded classmates in AP Calculus AB. All students are fake.</p></div>
+  <div class="profile-grid">
+    <div class="stack">
+      <div class="panel stack">
+        <div class="field"><label for="fname">First name</label><input id="fname" type="text" maxlength="20" value="${esc(state.me.name)}" autocomplete="off"></div>
+        <div><span class="eyebrow">Course</span><div class="chips" style="margin-top:6px"><span class="chip you">AP Calculus AB</span><span class="chip off">AP Chemistry</span><span class="chip off">AP Biology</span></div></div>
+      </div>
+      <div class="panel"><h2>Rate each unit</h2><p class="muted" style="margin:4px 0 8px">Strong units are what you teach. Weak units are what you learn.</p>
+        <div class="units">${UNITS.map((u,i)=>`<div class="unit"><div class="uname">${u}<small>Unit ${i+1}</small></div>
+          <div class="seg" role="group" aria-label="${u}">${[[1,"Weak"],[2,"OK"],[3,"Strong"]].map(([r,l])=>`<button data-unit="${i}" data-r="${r}" aria-pressed="${state.me.ratings[u]===r}">${l}</button>`).join("")}</div></div>`).join("")}</div></div>
+      <div class="panel"><h2>When are you free?</h2><p class="muted" style="margin:4px 0 12px">Click or drag hour blocks. <span class="mono">${state.me.slots.size}</span> hours selected.</p>
+        <div class="grid-wrap"><div class="avail" id="avail"><span></span>${DAYS.map(d=>`<span class="d">${d}</span>`).join("")}
+        ${HOURS.map(h=>`<span class="h">${hr(h)}</span>${DAYS.map((_,d)=>`<button class="c ${state.me.slots.has(key(d,h))?"on":""}" data-slot="${key(d,h)}" aria-label="${DAYS[d]} ${hr(h)}"></button>`).join("")}`).join("")}</div></div></div>
+      <div class="panel stack"><h2>Study style</h2>
+        <div class="row"><span style="min-width:110px">Noise</span><div class="seg">${["quiet","talk"].map(v=>`<button data-pref="noise" data-v="${v}" aria-pressed="${state.me.noise===v}">${v==="quiet"?"Quiet":"Talkative"}</button>`).join("")}</div></div>
+        <div class="row"><span style="min-width:110px">Best time</span><div class="seg">${["morning","afternoon","evening"].map(v=>`<button data-pref="time" data-v="${v}" aria-pressed="${state.me.time===v}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}</div></div>
+        <div class="row"><span style="min-width:110px">Camera</span><div class="seg">${[[false,"Off by default"],[true,"On"]].map(([v,l])=>`<button data-pref="camera" data-v="${v}" aria-pressed="${state.me.camera===v}">${l}</button>`).join("")}</div></div>
+      </div>
+    </div>
+    <aside class="panel live stack" aria-live="polite"><span class="eyebrow">Your match right now</span>
+      ${m?`<div class="pair"><div class="avatar them">${esc(m.partner.name[0])}</div><div><h2>${esc(m.partner.name)}</h2><span class="label ${matchLabel(m.score)[0]}">${matchLabel(m.score)[1]}</span></div></div>
+      <p>${explain(m)}</p><button class="btn primary" data-go="match">See match card →</button>`
+      :`<p>No great match yet. We'll pair you when more classmates join.</p><p class="muted">Try marking more hours free, or rating a unit Strong.</p>`}
+    </aside>
+  </div>`;
+}
+
+function renderMatch(){
+  const m=state.my, el=document.getElementById("v-match");
+  if(!m){ el.innerHTML=`<div class="intro"><span class="eyebrow">Step 2 · Your match</span><h1>No great match yet</h1><p class="muted">We'll pair you when more classmates join. You can also add free hours on your profile.</p></div><button class="btn" data-go="profile">Edit profile</button>`; return; }
+  const P=esc(m.partner.name), [lc,lt]=matchLabel(m.score);
+  const statusHtml = {
+    proposed:`<div class="row"><button class="btn you" data-act="accept">Accept</button><button class="btn" data-act="decline">Decline</button><button class="btn ghost small" data-act="report">Report or block</button></div>`,
+    waiting:`<div class="status"><span class="dot"></span>You accepted. Waiting for ${P} to accept.</div><div class="row"><button class="btn" data-act="partner-accept">Simulate ${P} accepting</button><span class="demo-tag">demo only</span></div>`,
+    active:`<div class="status active"><span class="dot"></span>You both accepted. Your session is ready.</div><div class="row"><button class="btn primary" data-act="start">Start session</button><button class="btn ghost small" data-act="report">Report or block</button></div>`,
+    ended:`<div class="status active"><span class="dot"></span>Session ${state.feedback.length} done. Nice work.</div><div class="row"><button class="btn primary" data-act="start">Start another session</button></div>`
+  }[state.status];
+  const bar=(l,v,w)=>`<div class="bar-row"><span>${l}</span><div class="bar"><i style="width:${v*100}%"></i></div><span class="mono" style="text-align:right">${v.toFixed(2)}×${w}</span></div>`;
+  el.innerHTML = `
+  <div class="intro"><span class="eyebrow">Step 2 · Your match</span><h1>You and ${P} can teach each other</h1></div>
+  <div class="match-grid">
+    <div class="panel stack">
+      <div class="card-head"><div class="pair"><div class="avatar you">${esc(state.me.name[0]||"?")}</div><span class="arrows">⇄</span><div class="avatar them">${P[0]}</div>
+        <div><h2>${esc(state.me.name)} &amp; ${P}</h2><span class="muted">AP Calculus AB</span></div></div><span class="label ${lc}">${lt}</span></div>
+      <p class="explain">${explain(m)}</p>
+      <div class="teach-cols">
+        <div class="teach-col you"><h3>You teach ${P}</h3>${m.aT.units.length?`<ul>${m.aT.units.map(u=>`<li>${u}${m.aT.half.includes(u)?' <span class="muted">(review)</span>':""}</li>`).join("")}</ul>`:'<p class="muted">Nothing this time</p>'}</div>
+        <div class="teach-col them"><h3>${P} teaches you</h3>${m.bT.units.length?`<ul>${m.bT.units.map(u=>`<li>${u}${m.bT.half.includes(u)?' <span class="muted">(review)</span>':""}</li>`).join("")}</ul>`:'<p class="muted">Nothing this time</p>'}</div>
+      </div>
+      <div><span class="eyebrow">Shared free time</span><div class="chips" style="margin-top:6px">${slotRanges(m.shared).map(s=>`<span class="chip">${s}</span>`).join("")}</div></div>
+      ${statusHtml}
+    </div>
+    <div class="panel stack"><h2>Why this score</h2>
+      <div class="bars">${bar("Swap",m.swap,.6)}${bar("Schedule",m.schedule,.25)}${bar("Style",m.style,.15)}</div>
+      <div class="row" style="justify-content:space-between"><span class="eyebrow">Total score</span><span class="mono" style="font-size:1.4rem;font-weight:600">${m.score.toFixed(3)}</span></div>
+      <div class="formula">swap_raw = min(you, them)×2 + max(you, them)
+         = min(${m.aT.pts}, ${m.bT.pts})×2 + max(${m.aT.pts}, ${m.bT.pts}) = ${(Math.min(m.aT.pts,m.bT.pts)*2+Math.max(m.aT.pts,m.bT.pts))}
+swap     = min(swap_raw / 6, 1) = ${m.swap.toFixed(2)}
+schedule = min(${m.shared.length} shared hrs, 6) / 6 = ${m.schedule.toFixed(2)}
+style    = ${m.sameNoise?"0.5 noise":"0"} + ${m.sameTime?"0.5 time":"0"} = ${m.style}</div>
+      <p class="muted" style="font-size:.85rem">Strong vs Weak counts 1 point, Strong vs OK counts ½. Two-way swaps count double, so a pair who both teach beats one-way tutoring.</p>
+    </div>
+  </div>`;
+}
+
+function renderClass(){
+  const R=state.result, S=R.S, nm=i=>i===0?`${esc(state.me.name)} (you)`:esc(S[i].name);
+  const taken=new Set(R.max.pairs.flat()), left=S.map((_,i)=>i).filter(i=>!taken.has(i));
+  const cmp=(l,a,b,f)=>`<tr><td>${l}</td><td class="num">${f(b)}</td><td class="num ${a>b+1e-9?"win":""}">${f(a)}</td></tr>`;
+  const toyOn = state.toy==="greedy"?["AB"]:["AC","BD"];
+  document.getElementById("v-class").innerHTML = `
+  <div class="intro"><span class="eyebrow">Step 3 · Class matching</span><h1>Pairing the whole class at once</h1>
+  <p class="muted">StudySwap finds the set of pairs with the highest total score (maximum weight matching), instead of grabbing the single best pair first and stranding people.</p></div>
+  <div class="class-grid">
+    <div class="panel stack">
+      <div class="row" style="justify-content:space-between"><h2>Pairs this round</h2><button class="btn small" data-act="reshuffle">Reshuffle fake class</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Pair</th><th class="num">Teaches</th><th class="num">Shared hrs</th><th class="num">Score</th></tr></thead><tbody>
+      ${R.max.pairs.map(([i,j])=>{const e=R.E[i][j];return `<tr class="${i===0||j===0?"mine":""}"><td>${nm(i)} ⇄ ${nm(j)}</td><td class="num">${e.aT.units.length} / ${e.bT.units.length}</td><td class="num">${e.shared.length}</td><td class="num">${e.score.toFixed(3)}</td></tr>`}).join("")}
+      </tbody></table></div>
+      ${left.length?`<p class="muted">Unmatched: ${left.map(nm).join(", ")}. They see "No great match yet."</p>`:`<p class="muted">Everyone has a partner.</p>`}
+    </div>
+    <div class="stack">
+      <div class="panel stack"><h2>Greedy vs. max-weight</h2><span class="muted" style="font-size:.85rem">Same ${S.length} students, same scores</span>
+        <div class="table-wrap"><table><thead><tr><th></th><th class="num">Greedy</th><th class="num">Max-weight</th></tr></thead><tbody>
+        ${cmp("Students matched",R.max.matched,R.greedy.matched,v=>`${v} / ${S.length}`)}
+        ${cmp("Total score",R.max.total,R.greedy.total,v=>v.toFixed(3))}
+        ${cmp("Avg swap score",R.max.swap,R.greedy.swap,v=>v.toFixed(3))}
+        </tbody></table></div>
+        <p class="muted" style="font-size:.85rem">On a friendly class the two can tie. Reshuffle to see cases where greedy loses.</p>
+      </div>
+      <div class="panel stack toy"><h2>Why greedy strands people</h2>
+        <div class="seg"><button data-toy="greedy" aria-pressed="${state.toy==="greedy"}">Greedy</button><button data-toy="max" aria-pressed="${state.toy==="max"}">Max-weight</button></div>
+        <svg viewBox="0 0 300 190" role="img" aria-label="Four students A B C D. Greedy picks A-B and strands C and D. Max weight picks A-C and B-D.">
+          <line class="nolink" x1="60" y1="150" x2="240" y2="150"/><text x="150" y="172" text-anchor="middle" style="fill:var(--muted);font-size:11px">no shared time</text>
+          <line class="${toyOn.includes("AB")?"on":""}" x1="60" y1="40" x2="240" y2="40"/><text x="150" y="30" text-anchor="middle">10</text>
+          <line class="${toyOn.includes("AC")?"on":""}" x1="60" y1="40" x2="60" y2="150"/><text x="42" y="100" text-anchor="middle">9</text>
+          <line class="${toyOn.includes("BD")?"on":""}" x1="240" y1="40" x2="240" y2="150"/><text x="258" y="100" text-anchor="middle">9</text>
+          ${[["A",60,40],["B",240,40],["C",60,150],["D",240,150]].map(([n,x,y])=>`<g class="node ${state.toy==="greedy"&&"CD".includes(n)?"stranded":""}"><circle cx="${x}" cy="${y}" r="18"/><text x="${x}" y="${y+6}" text-anchor="middle">${n}</text></g>`).join("")}
+        </svg>
+        <p>${state.toy==="greedy"?`Greedy grabs <mark>A–B (10)</mark> first. C and D have no shared time, so both are left out. Total <b class="mono">10</b>, 2 stranded.`:`Max-weight picks <mark>A–C + B–D</mark>. Total <b class="mono">18</b>, everyone matched.`}</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---------- Session ----------
+function buildPlan(m){
+  // Real app: an LLM writes this (with a template fallback). The prototype uses the fallback shape plus a sample problem bank.
+  const you=m.aT.units, them=m.bT.units, P=m.partner.name, Y=state.me.name;
+  const uYou=you[0]||them[1]||them[0], uThem=them[0]||you[1]||you[0];
+  const leadYou=you.length?"you":"them", leadThem=them.length?"them":"you";
+  const goal=(lead,u)=>{const L=lead==="you"?Y:P, S=lead==="you"?P:Y; return `${L} explains ${u} with one worked idea, then ${S} tries the problems while ${L} coaches.`;};
+  return {title:`${uYou} ⇄ ${uThem} swap`, segments:[
+    {minutes:5,leader:"both",unit:null,goal:"Warm-up: each person names the one thing in these units that confuses them most."},
+    {minutes:17,leader:leadYou,unit:uYou,goal:goal(leadYou,uYou),problems:BANK[uYou]},
+    {minutes:17,leader:leadThem,unit:uThem,goal:goal(leadThem,uThem),problems:BANK[uThem]},
+    {minutes:6,leader:"both",unit:null,goal:"Quiz each other: one problem each, then pick a time for next session."}]};
+}
+const leaderText = (l,s) => l==="both"?"Both of you": l==="you"?`${esc(state.me.name)} teaches`:`${esc(state.my.partner.name)} teaches`;
+function startSession(){
+  const plan=buildPlan(state.my);
+  state.session={plan, seg:0, left:plan.segments[0].minutes*60, running:false, speed:1, notes:plan.segments.map((_,k)=>({x:20+k*262,y:56+(k%2)*22})), speaking:0};
+  show("session");
+}
+function renderSession(){
+  const s=state.session, P=esc(state.my.partner.name);
+  document.getElementById("v-session").innerHTML = `
+  <div class="intro" style="margin-bottom:14px"><span class="eyebrow">Step 4 · Session room</span><h1>${esc(s.plan.title)}</h1></div>
+  <div class="timerbar" id="timerbar"></div>
+  <div class="room">
+    <div class="call">
+      <div class="tile" id="tile-you"><div class="avatar you">${esc(state.me.name[0]||"?")}</div><span class="tname">${esc(state.me.name)} (you)</span><span class="cam" id="cam-you">camera off</span></div>
+      <div class="tile" id="tile-them"><div class="avatar them">${P[0]}</div><span class="tname">${P}</span><span class="cam">camera off</span></div>
+      <div class="row"><button class="btn small" data-act="mic" id="mic">Mute mic</button><button class="btn small" data-act="cam">Turn camera on</button></div>
+      <p class="muted call-note" style="font-size:.8rem">Stand-in for the Daily call: private room, 2 people max, camera off by default, expires after 2 hours.</p>
+    </div>
+    <div class="board" id="board"><span class="board-tag">Stand-in for the tldraw board · drag the notes</span>
+      <div class="board-inner">${s.plan.segments.map((g,k)=>`
+        <div class="note" data-note="${k}" style="left:${s.notes[k].x}px;top:${s.notes[k].y}px">
+          <span class="eyebrow">Segment ${k+1} · ${g.minutes} min</span>
+          <h4>${g.unit?esc(g.unit):k===0?"Warm-up":"Quiz & plan"}</h4>
+          <div class="who ${g.leader}">${leaderText(g.leader)}</div>
+          <p style="margin-top:4px">${esc(g.goal)}</p>
+          ${g.problems?`<ol>${g.problems.map(p=>`<li>${esc(p)}</li>`).join("")}</ol><div class="ai">AI-generated: double-check with your notes.</div>`:""}
+        </div>`).join("")}</div>
+    </div>
+  </div>`;
+  renderTimer(); bindNotes();
+}
+function renderTimer(){
+  const s=state.session; if(!s) return; const tb=document.getElementById("timerbar"); if(!tb) return;
+  const g=s.plan.segments[s.seg], total=g.minutes*60, mm=String(Math.floor(s.left/60)).padStart(2,"0"), ss=String(s.left%60).padStart(2,"0");
+  tb.innerHTML = `<div class="now"><span class="eyebrow">Segment ${s.seg+1} of ${s.plan.segments.length}</span>
+    <strong>${leaderText(g.leader)}${g.unit?` ${esc(g.unit)}`:""}</strong></div>
+    <div class="clock" aria-live="off">${mm}:${ss}</div>
+    <div class="prog">${s.plan.segments.map((x,k)=>`<i style="--w:${x.minutes}" class="${k<s.seg?"done":""}">${k===s.seg?`<b style="width:${(1-s.left/total)*100}%"></b>`:""}</i>`).join("")}</div>
+    <div class="tb-actions"><button class="btn primary small" data-act="play">${s.running?"Pause":"Start timer"}</button>
+      <button class="btn small" data-act="next" ${s.seg>=s.plan.segments.length-1?"disabled":""}>Next segment</button>
+      <button class="btn small danger" data-act="report">Report or block</button>
+      <button class="btn small" data-act="end">End session</button>
+      <label><input type="checkbox" id="fast" ${s.speed>1?"checked":""}> Demo speed ×30</label></div>`;
+  document.querySelectorAll(".note").forEach(n=>n.classList.toggle("current", +n.dataset.note===s.seg));
+}
+let ticker=null;
+function tick(){
+  const s=state.session; if(!s||!s.running) return;
+  s.left--;
+  if(s.left<=0){ chime(); if(s.seg<s.plan.segments.length-1){s.seg++; s.left=s.plan.segments[s.seg].minutes*60;} else {s.left=0; s.running=false; toast("Time's up. End the session when you're ready.");} }
+  if(Math.random()<.08){ s.speaking=1-s.speaking; document.getElementById("tile-you")?.classList.toggle("speaking",s.speaking===0); document.getElementById("tile-them")?.classList.toggle("speaking",s.speaking===1); }
+  renderTimer();
+}
+function setTicker(){ clearInterval(ticker); const s=state.session; if(s&&s.running) ticker=setInterval(tick,1000/s.speed); }
+let audio=null;
+function chime(){ try{ audio ||= new (window.AudioContext||window.webkitAudioContext)(); const o=audio.createOscillator(), g=audio.createGain();
+  o.frequency.value=880; o.connect(g); g.connect(audio.destination); g.gain.setValueAtTime(.15,audio.currentTime); g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.8); o.start(); o.stop(audio.currentTime+.8);}catch(e){} }
+function bindNotes(){
+  document.querySelectorAll(".note").forEach(n=>{
+    n.addEventListener("pointerdown",ev=>{
+      const k=+n.dataset.note, sx=ev.clientX, sy=ev.clientY, ox=state.session.notes[k].x, oy=state.session.notes[k].y;
+      n.setPointerCapture(ev.pointerId); n.style.cursor="grabbing"; n.style.zIndex=3;
+      const move=e=>{const x=Math.max(0,ox+e.clientX-sx), y=Math.max(0,oy+e.clientY-sy); state.session.notes[k]={x,y}; n.style.left=x+"px"; n.style.top=y+"px";};
+      const up=()=>{n.removeEventListener("pointermove",move); n.style.cursor=""; n.style.zIndex="";};
+      n.addEventListener("pointermove",move); n.addEventListener("pointerup",up,{once:true});
+    });
+  });
+}
+
+// ---------- Modals + toast ----------
+function modal(html){ const r=document.getElementById("modal-root"); r.innerHTML=`<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; r.querySelector("button,input,textarea")?.focus(); }
+function closeModal(){ document.getElementById("modal-root").innerHTML=""; }
+let toastT=null;
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3600); }
+function reportModal(){
+  const P=esc(state.my.partner.name);
+  modal(`<h2>Report or block ${P}</h2><p class="muted">Reports go to a school admin. Blocking ends this match, and you'll never be matched with ${P} again.</p>
+    <div class="stack" style="gap:8px">${["Made me uncomfortable","Inappropriate language or content","Didn't show up","Something else"].map((r,i)=>`<label class="opt"><input type="radio" name="reason" id="reason${i}" value="${r}" ${i===0?"checked":""}> ${r}</label>`).join("")}</div>
+    <label class="opt"><input type="checkbox" id="also-block" checked> Also block ${P}</label>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" data-act="report-send">Send report</button></div>`);
+}
+function feedbackModal(){
+  const P=esc(state.my.partner.name);
+  modal(`<h2>How helpful was this session?</h2><div class="stars" role="group" aria-label="Helpfulness 1 to 5">${[1,2,3,4,5].map(n=>`<button data-star="${n}" aria-pressed="false">${n}</button>`).join("")}</div>
+    <label for="learned" style="font-weight:600">What did you learn from ${P}? <span class="muted">(optional)</span></label><textarea id="learned" maxlength="300"></textarea>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="skip-fb">Skip</button><button class="btn primary" data-act="send-fb">Submit</button></div>`);
+}
+
+// ---------- Events ----------
+let dragOn=null;
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-go],[data-act],[data-unit],[data-pref],[data-toy],[data-star]"); if(!t) return;
+  if(t.dataset.go){ show(t.dataset.go); return; }
+  if(t.dataset.unit){ state.me.ratings[UNITS[+t.dataset.unit]]=+t.dataset.r; recompute(); renderProfile(); return; }
+  if(t.dataset.pref){ const v=t.dataset.v; state.me[t.dataset.pref]= v==="true"?true: v==="false"?false: v; recompute(); renderProfile(); return; }
+  if(t.dataset.toy){ state.toy=t.dataset.toy; renderClass(); return; }
+  if(t.dataset.star){ document.querySelectorAll("[data-star]").forEach(b=>b.setAttribute("aria-pressed", b===t)); return; }
+  const a=t.dataset.act, s=state.session, P=state.my?.partner.name;
+  if(a==="close-scrim" && ev.target!==t) return;
+  switch(a){
+    case "accept": state.status="waiting"; renderMatch(); break;
+    case "partner-accept": state.status="active"; renderMatch(); toast(`${P} accepted. You can start a session.`); break;
+    case "decline": state.me.declined.add(state.partnerId); recompute(); renderMatch(); toast(state.my?`Declined. Here's your next best match: ${state.my.partner.name}.`:"Declined. No other match right now."); break;
+    case "start": startSession(); break;
+    case "report": reportModal(); break;
+    case "report-send": {
+      const block=document.getElementById("also-block").checked; closeModal();
+      if(block){ state.me.blocked.add(state.partnerId); if(state.session){state.session.running=false; setTicker(); state.session=null;} state.status="proposed"; state.partnerId=null; recompute(); show("match"); toast(`Report sent. ${P} is blocked and won't be matched with you again.`); }
+      else toast("Report sent to a school admin.");
+      break; }
+    case "close": case "close-scrim": closeModal(); break;
+    case "play": s.running=!s.running; if(s.running) chime(); setTicker(); renderTimer(); break;
+    case "next": s.seg++; s.left=s.plan.segments[s.seg].minutes*60; renderTimer(); break;
+    case "mic": t.textContent = t.textContent==="Mute mic"?"Unmute mic":"Mute mic"; break;
+    case "cam": { const on=t.textContent==="Turn camera on"; t.textContent=on?"Turn camera off":"Turn camera on"; document.getElementById("cam-you").textContent=on?"camera on (demo)":"camera off"; break; }
+    case "end": s.running=false; setTicker(); feedbackModal(); break;
+    case "skip-fb": case "send-fb": {
+      const star=document.querySelector('[data-star][aria-pressed="true"]');
+      state.feedback.push({helpful:star?+star.dataset.star:null}); closeModal(); state.session=null; state.status="ended"; show("match");
+      toast(a==="send-fb"?"Thanks. Feedback saved.":"Session ended."); break; }
+    case "reshuffle": state.seed++; state.cls=makeClass(state.seed); state.me.declined.clear(); state.me.blocked.clear(); state.status="proposed"; state.partnerId=null; recompute(); renderClass(); break;
+  }
+});
+document.addEventListener("change",ev=>{ if(ev.target.id==="fast"&&state.session){ state.session.speed=ev.target.checked?30:1; setTicker(); } });
+document.addEventListener("input",ev=>{ if(ev.target.id==="fname"){ state.me.name=ev.target.value.trim()||"You"; recompute(); const live=document.querySelector(".live"); if(live){ const keep=document.activeElement; renderProfile(); const f=document.getElementById("fname"); f.focus(); f.setSelectionRange(f.value.length,f.value.length);} } });
+// Availability: click or drag to paint
+document.addEventListener("pointerdown",ev=>{ const c=ev.target.closest("[data-slot]"); if(!c) return; ev.preventDefault(); const k=+c.dataset.slot; dragOn=!state.me.slots.has(k); paint(c); });
+document.addEventListener("pointerover",ev=>{ if(dragOn===null) return; const c=ev.target.closest("[data-slot]"); if(c) paint(c); });
+document.addEventListener("pointermove",ev=>{ if(dragOn===null||ev.pointerType==="mouse") return; const el=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-slot]"); if(el) paint(el); });
+document.addEventListener("pointerup",()=>{ if(dragOn!==null){ dragOn=null; recompute(); renderProfile(); } });
+function paint(c){ const k=+c.dataset.slot; dragOn?state.me.slots.add(k):state.me.slots.delete(k); c.classList.toggle("on",dragOn); }
+document.addEventListener("click",ev=>{ const c=ev.target.closest("[data-slot]"); if(!c||ev.detail!==0) return; const k=+c.dataset.slot; dragOn=!state.me.slots.has(k); paint(c); dragOn=null; recompute(); renderProfile(); document.querySelector(`[data-slot="${k}"]`)?.focus(); });
+document.addEventListener("keydown",ev=>{ if(ev.key==="Escape") closeModal(); });
+
+recompute(); show("profile");
+</script>
