@@ -92,8 +92,10 @@ def pair_score(a: dict, b: dict) -> tuple[float, dict] | None:
         "a_teaches": a_full + a_half,
         "b_teaches": b_full + b_half,
         "shared_slots": shared,
-        "same_noise": a["noise"] == b["noise"],
-        "same_time": a["time"] == b["time"],
+        # The shared preference value (e.g. "quiet"), or None if they differ.
+        # explain.py turns these into "You both prefer quiet study ...".
+        "shared_noise": a["noise"] if a["noise"] == b["noise"] else None,
+        "shared_time": a["time"] if a["time"] == b["time"] else None,
     }
     return round(score, 4), breakdown
 

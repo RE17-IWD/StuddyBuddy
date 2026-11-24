@@ -4,7 +4,7 @@ Pairs students who can teach each other, then gives them exactly what to do in t
 
 Built for the CSC Winter Sparkathon (Nov 2026). The full build plan is in [PLAN.md](PLAN.md).
 
-> Status: **Phase 0 (setup)**. The matching engine from Phase 1 is already in `api/app/matching.py` with tests.
+> Status: **Phase 1 done** (matching engine, explanations, seed data, greedy vs. max-weight comparison).
 > A clickable design prototype (fake data, no backend) is in [`prototype/index.html`](prototype/index.html). Open it in a browser.
 
 ## Repo layout
@@ -40,6 +40,15 @@ Run the tests:
 ```bash
 cd api
 pytest
+```
+
+### Matching scripts
+
+From the repo root, after installing the API requirements:
+
+```bash
+python scripts/seed.py               # summary of the fake demo data
+python scripts/compare_matching.py   # greedy vs. max-weight numbers for the writeup
 ```
 
 ### Web (port 3000)
